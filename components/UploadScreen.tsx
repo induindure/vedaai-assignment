@@ -1,18 +1,58 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Award, BookOpen, CheckCircle2, UserRound } from "lucide-react";
+import { ArrowRight, Award, BookOpen, CheckCircle2, Loader2, UserRound } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import FileUploadBox from "@/components/FileUploadBox";
 import type { UploadedFileMeta } from "@/types/upload";
+import type { ProcessErrorResponse, ProcessResponse } from "@/types/processing";
+
+type MappingStatus = "idle" | "processing" | "done" | "error";
 
 export default function UploadScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [questionPaper, setQuestionPaper] = useState<UploadedFileMeta | null>(null);
   const [answerSheet, setAnswerSheet] = useState<UploadedFileMeta | null>(null);
+  const [mappingStatus, setMappingStatus] = useState<MappingStatus>("idle");
+  const [mappingMessage, setMappingMessage] = useState<string | null>(null);
 
   const bothUploaded = !!questionPaper && !!answerSheet;
+  const canStartMapping = bothUploaded && mappingStatus !== "processing";
+
+  const resetMappingStatus = () => {
+    setMappingStatus("idle");
+    setMappingMessage(null);
+  };
+
+  const handleStartMapping = async () => {
+    if (!questionPaper || !answerSheet) return;
+
+    setMappingStatus("processing");
+    setMappingMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("questionPaper", questionPaper.file);
+      formData.append("answerSheet", answerSheet.file);
+
+      const response = await fetch("/api/process", { method: "POST", body: formData });
+      const data: ProcessResponse | ProcessErrorResponse = await response.json();
+
+      if (!response.ok || "error" in data) {
+        const errorMessage = "error" in data ? data.error : "Failed to process the uploaded files.";
+        throw new Error(errorMessage);
+      }
+
+      console.log("Processing complete:", data);
+      setMappingStatus("done");
+      setMappingMessage("Processing complete, check console.");
+    } catch (error) {
+      console.error("Processing failed:", error);
+      setMappingStatus("error");
+      setMappingMessage(error instanceof Error ? error.message : "Something went wrong while processing the files.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -52,32 +92,62 @@ export default function UploadScreen() {
               <FileUploadBox
                 subject="Question Paper"
                 value={questionPaper}
-                onFileAccepted={setQuestionPaper}
-                onRemove={() => setQuestionPaper(null)}
+                onFileAccepted={(meta) => {
+                  setQuestionPaper(meta);
+                  resetMappingStatus();
+                }}
+                onRemove={() => {
+                  setQuestionPaper(null);
+                  resetMappingStatus();
+                }}
               />
               <FileUploadBox
                 subject="Answer Sheet"
                 value={answerSheet}
-                onFileAccepted={setAnswerSheet}
-                onRemove={() => setAnswerSheet(null)}
+                onFileAccepted={(meta) => {
+                  setAnswerSheet(meta);
+                  resetMappingStatus();
+                }}
+                onRemove={() => {
+                  setAnswerSheet(null);
+                  resetMappingStatus();
+                }}
               />
             </div>
 
             <div className="mt-8 flex flex-col items-center">
               <button
                 type="button"
-                disabled={!bothUploaded}
+                disabled={!canStartMapping}
+                onClick={handleStartMapping}
                 className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${
-                  bothUploaded
+                  canStartMapping
                     ? "cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800"
                     : "cursor-not-allowed bg-neutral-100 text-neutral-400"
                 }`}
               >
-                Start Mapping
-                <ArrowRight size={16} />
+                {mappingStatus === "processing" ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  <>
+                    Start Mapping
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </button>
-              <p className="mt-3 max-w-sm text-center text-xs text-neutral-400">
-                Once both files are uploaded, you&apos;ll able to map answers with questions
+              <p
+                className={`mt-3 max-w-sm text-center text-xs ${
+                  mappingStatus === "error"
+                    ? "text-red-500"
+                    : mappingStatus === "done"
+                      ? "text-emerald-600"
+                      : "text-neutral-400"
+                }`}
+              >
+                {mappingMessage ?? "Once both files are uploaded, you'll able to map answers with questions"}
               </p>
             </div>
           </div>
