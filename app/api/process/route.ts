@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fileToImages } from "@/lib/fileToImages";
+import { fileToImages, type PageImage } from "@/lib/fileToImages";
+import { extractQuestions } from "@/lib/extractQuestions";
 import type { PageImageData, ProcessedFile, ProcessResponse } from "@/types/processing";
 
 // @napi-rs/canvas (used for PDF rasterization) relies on native bindings, so this
@@ -16,10 +17,13 @@ function validateUpload(entry: FormDataEntryValue | null, label: string): string
   return null;
 }
 
-async function processUpload(file: File): Promise<ProcessedFile> {
+async function rasterizeUpload(file: File): Promise<PageImage[]> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const pages = await fileToImages(buffer, file.type);
-  const outputMimeType = file.type === "application/pdf" ? "image/png" : (file.type as "image/png" | "image/jpeg");
+  return fileToImages(buffer, file.type);
+}
+
+function toProcessedFile(pages: PageImage[], sourceMimeType: string): ProcessedFile {
+  const outputMimeType = sourceMimeType === "application/pdf" ? "image/png" : (sourceMimeType as "image/png" | "image/jpeg");
 
   const pageData: PageImageData[] = pages.map((page) => ({
     pageNumber: page.pageNumber,
@@ -53,12 +57,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const [questionPaper, answerSheet] = await Promise.all([
-      processUpload(questionPaperEntry),
-      processUpload(answerSheetEntry),
+    const [questionPaperPages, answerSheetPages] = await Promise.all([
+      rasterizeUpload(questionPaperEntry),
+      rasterizeUpload(answerSheetEntry),
     ]);
 
-    const response: ProcessResponse = { questionPaper, answerSheet };
+    const questions = await extractQuestions(questionPaperPages);
+
+    const response: ProcessResponse = {
+      questionPaper: toProcessedFile(questionPaperPages, questionPaperEntry.type),
+      answerSheet: toProcessedFile(answerSheetPages, answerSheetEntry.type),
+      questions,
+    };
     return NextResponse.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to process the uploaded files.";

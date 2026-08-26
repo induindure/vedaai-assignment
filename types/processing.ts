@@ -1,3 +1,5 @@
+import type { ExtractedQuestion } from "@/lib/extractQuestions";
+
 export interface PageImageData {
   pageNumber: number;
   width: number;
@@ -15,6 +17,7 @@ export interface ProcessedFile {
 export interface ProcessResponse {
   questionPaper: ProcessedFile;
   answerSheet: ProcessedFile;
+  questions: ExtractedQuestion[];
 }
 
 export interface ProcessErrorResponse {
