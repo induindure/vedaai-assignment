@@ -1,4 +1,5 @@
 import type { ExtractedQuestion } from "@/lib/extractQuestions";
+import type { ExtractedAnswerBlock } from "@/lib/extractAnswers";
 
 export interface PageImageData {
   pageNumber: number;
@@ -18,6 +19,7 @@ export interface ProcessResponse {
   questionPaper: ProcessedFile;
   answerSheet: ProcessedFile;
   questions: ExtractedQuestion[];
+  answers: ExtractedAnswerBlock[];
 }
 
 export interface ProcessErrorResponse {

@@ -46,6 +46,7 @@ export default function UploadScreen() {
 
       console.log("Processing complete:", data);
       console.log("Extracted questions:", data.questions);
+      console.log("Extracted answers:", data.answers);
       setMappingStatus("done");
       setMappingMessage("Processing complete, check console.");
     } catch (error) {

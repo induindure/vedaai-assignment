@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fileToImages, type PageImage } from "@/lib/fileToImages";
 import { extractQuestions } from "@/lib/extractQuestions";
+import { extractAnswers } from "@/lib/extractAnswers";
 import type { PageImageData, ProcessedFile, ProcessResponse } from "@/types/processing";
 
 // @napi-rs/canvas (used for PDF rasterization) relies on native bindings, so this
@@ -62,12 +63,16 @@ export async function POST(request: NextRequest) {
       rasterizeUpload(answerSheetEntry),
     ]);
 
-    const questions = await extractQuestions(questionPaperPages);
+    const [questions, answers] = await Promise.all([
+      extractQuestions(questionPaperPages),
+      extractAnswers(answerSheetPages),
+    ]);
 
     const response: ProcessResponse = {
       questionPaper: toProcessedFile(questionPaperPages, questionPaperEntry.type),
       answerSheet: toProcessedFile(answerSheetPages, answerSheetEntry.type),
       questions,
+      answers,
     };
     return NextResponse.json(response);
   } catch (error) {
