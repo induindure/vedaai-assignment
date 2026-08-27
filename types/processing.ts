@@ -1,6 +1,7 @@
 import type { ExtractedQuestion } from "@/lib/extractQuestions";
 import type { ExtractedAnswerBlock } from "@/lib/extractAnswers";
-import type { MappingResult } from "@/lib/mapAnswers";
+import type { AnswerBlock, MappedQuestion } from "@/lib/mapAnswers";
+import type { Grading } from "@/lib/gradeAnswer";
 
 export interface PageImageData {
   pageNumber: number;
@@ -16,12 +17,26 @@ export interface ProcessedFile {
   pages: PageImageData[];
 }
 
+/**
+ * A mapped question enriched with its grading. `grading` is null only if grading failed
+ * outright for the whole paper (Gemini unavailable) — the API route degrades gracefully by
+ * still returning the (already valuable) mapping result rather than failing the request.
+ */
+export interface GradedMappedQuestion extends MappedQuestion {
+  grading: Grading | null;
+}
+
+export interface GradedMappingResult {
+  mappedQuestions: GradedMappedQuestion[];
+  unmatchedAnswers: AnswerBlock[];
+}
+
 export interface ProcessResponse {
   questionPaper: ProcessedFile;
   answerSheet: ProcessedFile;
   questions: ExtractedQuestion[];
   answers: ExtractedAnswerBlock[];
-  mapping: MappingResult;
+  mapping: GradedMappingResult;
 }
 
 export interface ProcessErrorResponse {

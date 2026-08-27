@@ -3,7 +3,8 @@ import { fileToImages, type PageImage } from "@/lib/fileToImages";
 import { extractQuestions } from "@/lib/extractQuestions";
 import { extractAnswers } from "@/lib/extractAnswers";
 import { mapAnswers } from "@/lib/mapAnswers";
-import type { PageImageData, ProcessedFile, ProcessResponse, ProcessStreamEvent } from "@/types/processing";
+import { gradeAnswers } from "@/lib/gradeAnswer";
+import type { GradedMappedQuestion, PageImageData, ProcessedFile, ProcessResponse, ProcessStreamEvent } from "@/types/processing";
 
 // @napi-rs/canvas (used for PDF rasterization) relies on native bindings, so this
 // route must run on the Node.js runtime rather than the Edge runtime.
@@ -98,12 +99,29 @@ export async function POST(request: NextRequest) {
 
         const mapping = await mapAnswers(questionPaperResult.extracted, answerSheetResult.extracted);
 
+        send({ type: "progress", message: "Grading answers..." });
+
+        // Grading is a bonus layer on top of an already-valuable mapping result. Unlike the
+        // extraction/mapping stages above, a total grading failure (Gemini unavailable across
+        // every configured key) doesn't fail the whole request — it'd be a shame to lose the
+        // correctly-matched Q&A pairs over the one enhancement that isn't essential. Every
+        // question just comes back with `grading: null`, which the frontend renders as
+        // "ungraded" rather than a score.
+        let gradedMappedQuestions: GradedMappedQuestion[];
+        try {
+          const gradings = await gradeAnswers(mapping.mappedQuestions);
+          gradedMappedQuestions = mapping.mappedQuestions.map((mapped, index) => ({ ...mapped, grading: gradings[index] }));
+        } catch (error) {
+          console.error("Grading failed; returning the mapping result ungraded.", error);
+          gradedMappedQuestions = mapping.mappedQuestions.map((mapped) => ({ ...mapped, grading: null }));
+        }
+
         const result: ProcessResponse = {
           questionPaper: toProcessedFile(questionPaperResult.pages),
           answerSheet: toProcessedFile(answerSheetResult.pages),
           questions: questionPaperResult.extracted,
           answers: answerSheetResult.extracted,
-          mapping,
+          mapping: { mappedQuestions: gradedMappedQuestions, unmatchedAnswers: mapping.unmatchedAnswers },
         };
 
         send({ type: "result", data: result });

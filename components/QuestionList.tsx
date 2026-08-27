@@ -4,10 +4,12 @@ import { useState } from "react";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import QuestionCard from "@/components/QuestionCard";
 import UnmatchedAnswersList from "@/components/UnmatchedAnswersList";
-import type { AnswerBlock, MappedQuestion } from "@/lib/mapAnswers";
+import GradingSummary from "@/components/GradingSummary";
+import type { AnswerBlock } from "@/lib/mapAnswers";
+import type { GradedMappedQuestion } from "@/types/processing";
 
 interface QuestionListProps {
-  mappedQuestions: MappedQuestion[];
+  mappedQuestions: GradedMappedQuestion[];
   unmatchedAnswers: AnswerBlock[];
   selectedKey: string | null;
   onSelectQuestion: (index: number) => void;
@@ -59,26 +61,30 @@ export default function QuestionList({
         </button>
       </div>
 
-      <div className="mt-4 flex-1 space-y-2.5 overflow-y-auto pr-1">
-        {mappedQuestions.length === 0 && (
-          <p className="py-8 text-center text-sm text-neutral-400">No questions were found in the question paper.</p>
-        )}
+      <div className="mt-4 flex-1 overflow-y-auto pr-1">
+        <GradingSummary mappedQuestions={mappedQuestions} />
 
-        {mappedQuestions.map((mapped, index) => (
-          <QuestionCard
-            key={index}
-            mapped={mapped}
-            index={index}
-            isSelected={selectedKey === `q-${index}`}
-            isExpanded={expandedIndices.has(index)}
-            onSelect={handleSelect}
-            onJumpToPage={onJumpToPage}
-          />
-        ))}
+        <div className="space-y-2.5">
+          {mappedQuestions.length === 0 && (
+            <p className="py-8 text-center text-sm text-neutral-400">No questions were found in the question paper.</p>
+          )}
 
-        {unmatchedAnswers.length > 0 && (
-          <UnmatchedAnswersList unmatchedAnswers={unmatchedAnswers} selectedKey={selectedKey} onSelect={onSelectUnmatched} />
-        )}
+          {mappedQuestions.map((mapped, index) => (
+            <QuestionCard
+              key={index}
+              mapped={mapped}
+              index={index}
+              isSelected={selectedKey === `q-${index}`}
+              isExpanded={expandedIndices.has(index)}
+              onSelect={handleSelect}
+              onJumpToPage={onJumpToPage}
+            />
+          ))}
+
+          {unmatchedAnswers.length > 0 && (
+            <UnmatchedAnswersList unmatchedAnswers={unmatchedAnswers} selectedKey={selectedKey} onSelect={onSelectUnmatched} />
+          )}
+        </div>
       </div>
     </div>
   );

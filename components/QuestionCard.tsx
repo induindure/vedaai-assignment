@@ -1,10 +1,12 @@
 "use client";
 
-import { Check, ChevronDown, Flag, Minus } from "lucide-react";
-import type { MappedQuestion, MatchStatus } from "@/lib/mapAnswers";
+import { ChevronDown, Flag, Sparkles } from "lucide-react";
+import type { MatchStatus } from "@/lib/mapAnswers";
+import type { Grading } from "@/lib/gradeAnswer";
+import type { GradedMappedQuestion } from "@/types/processing";
 
 interface QuestionCardProps {
-  mapped: MappedQuestion;
+  mapped: GradedMappedQuestion;
   index: number;
   isSelected: boolean;
   isExpanded: boolean;
@@ -12,30 +14,38 @@ interface QuestionCardProps {
   onJumpToPage: (page: number) => void;
 }
 
-function StatusBadge({ status }: { status: MatchStatus }) {
-  if (status === "answered") {
-    return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-        <Check size={12} strokeWidth={3} />
-      </span>
-    );
-  }
-  if (status === "out-of-order") {
-    return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-        <Flag size={11} strokeWidth={2.5} />
-      </span>
-    );
+const VERDICT_BADGE_CLASSES: Record<Grading["verdict"], string> = {
+  correct: "bg-emerald-100 text-emerald-700",
+  partial: "bg-amber-100 text-amber-700",
+  incorrect: "bg-red-100 text-red-700",
+  unanswered: "bg-neutral-100 text-neutral-400",
+};
+
+function ScoreBadge({ grading }: { grading: Grading | null }) {
+  if (!grading) {
+    return <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-400">Ungraded</span>;
   }
   return (
-    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-      <Minus size={12} strokeWidth={3} />
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${VERDICT_BADGE_CLASSES[grading.verdict]}`}>
+      {grading.score}/{grading.maxScore}
+    </span>
+  );
+}
+
+function OutOfOrderFlag({ status }: { status: MatchStatus }) {
+  if (status !== "out-of-order") return null;
+  return (
+    <span
+      title="This answer appears out of order on the answer sheet"
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600"
+    >
+      <Flag size={11} strokeWidth={2.5} />
     </span>
   );
 }
 
 export default function QuestionCard({ mapped, index, isSelected, isExpanded, onSelect, onJumpToPage }: QuestionCardProps) {
-  const { question, answerBlocks, status, matchConfidence } = mapped;
+  const { question, answerBlocks, status, matchConfidence, grading } = mapped;
   const label = question.subpart ? `${question.questionNumber}${question.subpart}` : question.questionNumber;
   const isInteractive = status !== "unanswered" && !!answerBlocks;
 
@@ -71,8 +81,9 @@ export default function QuestionCard({ mapped, index, isSelected, isExpanded, on
           </span>
         </span>
 
-        <span className="mt-1 flex shrink-0 items-center gap-2">
-          <StatusBadge status={status} />
+        <span className="mt-1 flex shrink-0 items-center gap-1.5">
+          <OutOfOrderFlag status={status} />
+          <ScoreBadge grading={grading} />
           {isInteractive && (
             <ChevronDown size={14} className={`text-neutral-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
           )}
@@ -92,6 +103,16 @@ export default function QuestionCard({ mapped, index, isSelected, isExpanded, on
               {block.text}
             </p>
           ))}
+
+          {grading?.feedback && (
+            <div className="rounded-xl bg-violet-50 px-3 py-2.5">
+              <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-500">
+                <Sparkles size={11} />
+                AI Feedback
+              </p>
+              <p className="text-xs leading-relaxed text-violet-900">{grading.feedback}</p>
+            </div>
+          )}
 
           {distinctPages.length > 1 && (
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
