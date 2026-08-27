@@ -7,13 +7,27 @@ export interface PageImage {
   imageBuffer: Buffer;
   width: number;
   height: number;
+  mimeType: "image/png" | "image/jpeg";
 }
 
 const PDF_MIME_TYPE = "application/pdf";
 const SUPPORTED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
 
-/** Resolution multiplier used when rasterizing PDF pages; higher = sharper but slower/larger. */
+// scale is a multiplier on the PDF's own 72-points-per-inch unit, so scale 2 renders at
+// 144 DPI — already within the ~150-200 DPI range generally considered sufficient for
+// OCR/handwriting recognition, not the "300 DPI" print-quality resolution that would be
+// worth cutting down. Left as-is; JPEG output (below) is the actual payload-size lever here.
 const PDF_RENDER_SCALE = 2;
+
+// pdf-to-img can encode either PNG or JPEG but doesn't expose a quality knob for JPEG (it
+// calls @napi-rs/canvas's encoder with no quality argument, i.e. its default). Rendered pages
+// are flat vector text/line-art rather than photographic content, so PNG's lossless
+// compression is already fairly competitive here — real-world scanned/photographed answer
+// sheets (noise, paper texture, uneven lighting) are exactly the content JPEG was built to
+// compress well, and is where this format switch pays off most. Empirically verified this
+// default quality holds up for extraction accuracy (see the task that introduced this).
+const PDF_RENDER_FORMAT = "jpg";
+const PDF_RENDER_MIME_TYPE = "image/jpeg";
 
 // pdf-to-img derives these paths itself via `require.resolve("pdfjs-dist/package.json")` run
 // through `node:path/posix`, which silently produces a wrong (relative) path on Windows and
@@ -47,6 +61,7 @@ async function pdfToImages(buffer: Buffer): Promise<PageImage[]> {
   try {
     doc = await renderPdf(buffer, {
       scale: PDF_RENDER_SCALE,
+      format: PDF_RENDER_FORMAT,
       docInitParams: { standardFontDataUrl, cMapUrl, cMapPacked: true },
     });
   } catch {
@@ -61,8 +76,8 @@ async function pdfToImages(buffer: Buffer): Promise<PageImage[]> {
     const pages: PageImage[] = [];
     let pageNumber = 1;
     for await (const imageBuffer of doc) {
-      const { width, height } = getImageDimensions(imageBuffer, "image/png");
-      pages.push({ pageNumber, imageBuffer, width, height });
+      const { width, height } = getImageDimensions(imageBuffer, PDF_RENDER_MIME_TYPE);
+      pages.push({ pageNumber, imageBuffer, width, height, mimeType: PDF_RENDER_MIME_TYPE });
       pageNumber++;
     }
     return pages;
@@ -77,7 +92,8 @@ async function pdfToImages(buffer: Buffer): Promise<PageImage[]> {
 function imageToImages(buffer: Buffer, mimeType: string): PageImage[] {
   try {
     const { width, height } = getImageDimensions(buffer, mimeType);
-    return [{ pageNumber: 1, imageBuffer: buffer, width, height }];
+    // Safe: the caller already checked mimeType against SUPPORTED_IMAGE_MIME_TYPES.
+    return [{ pageNumber: 1, imageBuffer: buffer, width, height, mimeType: mimeType as "image/png" | "image/jpeg" }];
   } catch {
     throw new Error("Could not read the image file — it may be corrupted or is not a valid PNG/JPEG.");
   }

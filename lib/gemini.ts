@@ -167,7 +167,7 @@ function buildPageParts(pages: PageImage[]): Part[] {
   const parts: Part[] = [];
   for (const page of pages) {
     parts.push({ text: `Page ${page.pageNumber}:` });
-    parts.push({ inlineData: { mimeType: "image/png", data: page.imageBuffer.toString("base64") } });
+    parts.push({ inlineData: { mimeType: page.mimeType, data: page.imageBuffer.toString("base64") } });
   }
   return parts;
 }

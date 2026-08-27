@@ -6,12 +6,50 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import FileUploadBox from "@/components/FileUploadBox";
 import type { UploadedFileMeta } from "@/types/upload";
-import type { ProcessErrorResponse, ProcessResponse } from "@/types/processing";
+import type { ProcessResponse, ProcessStreamEvent } from "@/types/processing";
 
 type MappingStatus = "idle" | "processing" | "error";
 
 interface UploadScreenProps {
   onProcessed: (data: ProcessResponse) => void;
+}
+
+/**
+ * Reads /api/process's newline-delimited JSON event stream, calling `onProgress` as
+ * "progress" events arrive and resolving with the payload once a "result" event arrives.
+ */
+async function readProcessStream(body: ReadableStream<Uint8Array>, onProgress: (message: string) => void): Promise<ProcessResponse> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ProcessResponse | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? ""; // last element may be an incomplete line — keep it for the next chunk
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event: ProcessStreamEvent = JSON.parse(line);
+
+      if (event.type === "progress") {
+        onProgress(event.message);
+      } else if (event.type === "result") {
+        result = event.data;
+      } else {
+        throw new Error(event.message);
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error("The server closed the connection before finishing.");
+  }
+  return result;
 }
 
 export default function UploadScreen({ onProcessed }: UploadScreenProps) {
@@ -33,7 +71,7 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
     if (!questionPaper || !answerSheet) return;
 
     setMappingStatus("processing");
-    setMappingMessage(null);
+    setMappingMessage("Converting pages...");
 
     try {
       const formData = new FormData();
@@ -41,12 +79,19 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
       formData.append("answerSheet", answerSheet.file);
 
       const response = await fetch("/api/process", { method: "POST", body: formData });
-      const data: ProcessResponse | ProcessErrorResponse = await response.json();
 
-      if (!response.ok || "error" in data) {
-        const errorMessage = "error" in data ? data.error : "Failed to process the uploaded files.";
-        throw new Error(errorMessage);
+      if (!response.ok) {
+        // Only the synchronous validation path (bad file type, missing file, etc.) responds
+        // this way — once streaming has started the response is always 200, with success/
+        // failure communicated through the stream's own "result"/"error" events instead.
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? "Failed to process the uploaded files.");
       }
+      if (!response.body) {
+        throw new Error("The server did not return a response body.");
+      }
+
+      const data = await readProcessStream(response.body, setMappingMessage);
 
       console.log("Processing complete:", data);
       // mappingStatus stays "processing" here on purpose — the parent immediately swaps this
@@ -71,10 +116,8 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
             <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
               <Loader2 size={36} className="animate-spin text-neutral-400" />
               <div>
-                <p className="text-base font-semibold text-neutral-800">Processing…</p>
-                <p className="mt-1 max-w-xs text-sm text-neutral-500">
-                  Reading both files, extracting questions and answers, and mapping them together. This can take a minute.
-                </p>
+                <p className="text-base font-semibold text-neutral-800">{mappingMessage ?? "Processing…"}</p>
+                <p className="mt-1 max-w-xs text-sm text-neutral-500">This can take a minute.</p>
               </div>
             </div>
           ) : (

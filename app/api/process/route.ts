@@ -3,7 +3,7 @@ import { fileToImages, type PageImage } from "@/lib/fileToImages";
 import { extractQuestions } from "@/lib/extractQuestions";
 import { extractAnswers } from "@/lib/extractAnswers";
 import { mapAnswers } from "@/lib/mapAnswers";
-import type { PageImageData, ProcessedFile, ProcessResponse } from "@/types/processing";
+import type { PageImageData, ProcessedFile, ProcessResponse, ProcessStreamEvent } from "@/types/processing";
 
 // @napi-rs/canvas (used for PDF rasterization) relies on native bindings, so this
 // route must run on the Node.js runtime rather than the Edge runtime.
@@ -24,14 +24,12 @@ async function rasterizeUpload(file: File): Promise<PageImage[]> {
   return fileToImages(buffer, file.type);
 }
 
-function toProcessedFile(pages: PageImage[], sourceMimeType: string): ProcessedFile {
-  const outputMimeType = sourceMimeType === "application/pdf" ? "image/png" : (sourceMimeType as "image/png" | "image/jpeg");
-
+function toProcessedFile(pages: PageImage[]): ProcessedFile {
   const pageData: PageImageData[] = pages.map((page) => ({
     pageNumber: page.pageNumber,
     width: page.width,
     height: page.height,
-    mimeType: outputMimeType,
+    mimeType: page.mimeType,
     imageBase64: page.imageBuffer.toString("base64"),
   }));
 
@@ -58,29 +56,70 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: validationErrors.join(" ") }, { status: 400 });
   }
 
-  try {
-    const [questionPaperPages, answerSheetPages] = await Promise.all([
-      rasterizeUpload(questionPaperEntry),
-      rasterizeUpload(answerSheetEntry),
-    ]);
+  // From here on, work happens inside a streamed response rather than a single JSON body, so
+  // the frontend can show progress text as each stage completes. This still keeps the two
+  // documents' rasterize→extract pipelines fully concurrent (see processDocument below) —
+  // the alternative of splitting this into several back-to-back requests for progress
+  // reporting would force those pipelines to run sequentially instead, working against the
+  // parallelism this same change is meant to add.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: ProcessStreamEvent) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
 
-    const [questions, answers] = await Promise.all([
-      extractQuestions(questionPaperPages),
-      extractAnswers(answerSheetPages),
-    ]);
+      try {
+        send({ type: "progress", message: "Converting pages..." });
 
-    const mapping = await mapAnswers(questions, answers);
+        // Fires once, the first time either document finishes rasterizing and is about to
+        // start extraction — whichever gets there first, since the two pipelines run
+        // independently and can finish their own rasterization at different times.
+        let announcedExtracting = false;
+        const announceExtractingOnce = () => {
+          if (announcedExtracting) return;
+          announcedExtracting = true;
+          send({ type: "progress", message: "Extracting questions and answers..." });
+        };
 
-    const response: ProcessResponse = {
-      questionPaper: toProcessedFile(questionPaperPages, questionPaperEntry.type),
-      answerSheet: toProcessedFile(answerSheetPages, answerSheetEntry.type),
-      questions,
-      answers,
-      mapping,
-    };
-    return NextResponse.json(response);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to process the uploaded files.";
-    return NextResponse.json({ error: message }, { status: 422 });
-  }
+        async function processDocument<T>(file: File, extract: (pages: PageImage[]) => Promise<T>) {
+          const pages = await rasterizeUpload(file);
+          announceExtractingOnce();
+          const extracted = await extract(pages);
+          return { pages, extracted };
+        }
+
+        const [questionPaperResult, answerSheetResult] = await Promise.all([
+          processDocument(questionPaperEntry, extractQuestions),
+          processDocument(answerSheetEntry, extractAnswers),
+        ]);
+
+        send({ type: "progress", message: "Mapping answers to questions..." });
+
+        const mapping = await mapAnswers(questionPaperResult.extracted, answerSheetResult.extracted);
+
+        const result: ProcessResponse = {
+          questionPaper: toProcessedFile(questionPaperResult.pages),
+          answerSheet: toProcessedFile(answerSheetResult.pages),
+          questions: questionPaperResult.extracted,
+          answers: answerSheetResult.extracted,
+          mapping,
+        };
+
+        send({ type: "result", data: result });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to process the uploaded files.";
+        send({ type: "error", message });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
+  });
 }
