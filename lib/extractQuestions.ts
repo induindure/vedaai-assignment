@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { PageImage } from "@/lib/fileToImages";
-import { getGeminiClient, generateJsonArrayForDocument } from "@/lib/gemini";
+import { generateJsonArrayForDocument } from "@/lib/gemini";
 
 export interface ExtractedQuestion {
   questionNumber: string;
@@ -66,11 +66,9 @@ If there are no questions anywhere in this document, respond with exactly: []`;
 export async function extractQuestions(pages: PageImage[]): Promise<ExtractedQuestion[]> {
   if (pages.length === 0) return [];
 
-  const ai = getGeminiClient();
   const validPageNumbers = new Set(pages.map((page) => page.pageNumber));
 
   const questions = await generateJsonArrayForDocument({
-    ai,
     pages,
     buildPrompt,
     schema: buildQuestionArraySchema(validPageNumbers),

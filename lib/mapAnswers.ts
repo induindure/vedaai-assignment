@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ExtractedQuestion } from "@/lib/extractQuestions";
 import type { ExtractedAnswerBlock } from "@/lib/extractAnswers";
-import { getGeminiClient, generateJsonArrayFromText } from "@/lib/gemini";
+import { generateJsonArrayFromText } from "@/lib/gemini";
 
 /** An answer block after continuation-merging: one or more raw blocks glued into one answer. */
 export interface AnswerBlock {
@@ -186,9 +186,7 @@ async function matchByContent(
 
   let matches: z.infer<typeof MatchArraySchema>;
   try {
-    const ai = getGeminiClient();
     matches = await generateJsonArrayFromText({
-      ai,
       buildPrompt: (strict) => buildMatchPrompt(strict, questionEntries, answerEntries),
       schema,
       errorContext: "Failed to content-match unlabeled answers",

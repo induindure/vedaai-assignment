@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { PageImage } from "@/lib/fileToImages";
-import { getGeminiClient, generateJsonArrayForDocument } from "@/lib/gemini";
+import { generateJsonArrayForDocument } from "@/lib/gemini";
 
 export interface ExtractedAnswerBlock {
   detectedLabel: string | null;
@@ -64,11 +64,9 @@ If there is no writing anywhere in this document, respond with exactly: []`;
 export async function extractAnswers(pages: PageImage[]): Promise<ExtractedAnswerBlock[]> {
   if (pages.length === 0) return [];
 
-  const ai = getGeminiClient();
   const validPageNumbers = new Set(pages.map((page) => page.pageNumber));
 
   const answers = await generateJsonArrayForDocument({
-    ai,
     pages,
     buildPrompt,
     schema: buildAnswerBlockArraySchema(validPageNumbers),
