@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TopBar from "@/components/TopBar";
 import QuestionList from "@/components/QuestionList";
 import AnswerSheetViewer, { type HighlightRegion } from "@/components/AnswerSheetViewer";
+import ResultsScreenSkeleton from "@/components/ResultsScreenSkeleton";
 import type { ProcessResponse } from "@/types/processing";
 
 interface ResultsScreenProps {
@@ -21,6 +22,15 @@ export default function ResultsScreen({ data, onBack }: ResultsScreenProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [activeTab, setActiveTab] = useState<MobileTab>("questions");
+
+  // The data itself is already in memory (no network wait), but mounting this screen still
+  // means laying out every question card plus decoding/painting the answer-sheet image in
+  // one go — showing a skeleton for the first frame avoids that read as a blank flash.
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setShowSkeleton(false));
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const handleSelectQuestion = (index: number) => {
     const blocks = mappedQuestions[index]?.answerBlocks;
@@ -62,6 +72,10 @@ export default function ResultsScreen({ data, onBack }: ResultsScreenProps) {
     return [];
   }, [selectedKey, mappedQuestions, unmatchedAnswers]);
 
+  if (showSkeleton) {
+    return <ResultsScreenSkeleton />;
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
       <TopBar onBack={onBack} />
@@ -92,6 +106,7 @@ export default function ResultsScreen({ data, onBack }: ResultsScreenProps) {
           <QuestionList
             mappedQuestions={mappedQuestions}
             unmatchedAnswers={unmatchedAnswers}
+            noAnswersDetected={data.answers.length === 0}
             selectedKey={selectedKey}
             onSelectQuestion={handleSelectQuestion}
             onSelectUnmatched={handleSelectUnmatched}

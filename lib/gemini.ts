@@ -64,8 +64,28 @@ function extractHttpStatus(error: unknown): number | undefined {
  * Thrown when the API call itself fails (network error, rate limit, 5xx, timeout) — as
  * opposed to the call succeeding but returning a response that doesn't parse. Retrying with
  * a "stricter" prompt only makes sense for the latter, so callers need to tell them apart.
+ * `message` is already a clean, user-presentable sentence — see describeRequestFailure —
+ * never the raw SDK error (which for this API is a nested JSON blob, not fit to show anyone).
  */
 class GeminiRequestError extends Error {}
+
+/**
+ * Translates a request failure into one short, human sentence — no JSON, no status codes,
+ * nothing implying the reader manages API keys or billing. The raw error is still logged
+ * server-side (see generateContentWithFailover) for anyone who needs to actually debug it.
+ */
+function describeRequestFailure(status: number | undefined): string {
+  if (status === 429) {
+    return "the AI service is temporarily busy (usage limit reached) — please try again in a few minutes";
+  }
+  if (status === 503) {
+    return "the AI service is temporarily overloaded — please try again in a moment";
+  }
+  if (status !== undefined) {
+    return "the AI service returned an unexpected error — please try again";
+  }
+  return "the AI service could not be reached — please check your connection and try again";
+}
 
 /**
  * Sends one generateContent request, trying each configured API key in turn. Only a 429
@@ -92,16 +112,16 @@ async function generateContentWithFailover(request: GenerateContentParameters): 
         continue;
       }
 
-      if (status === 429) {
-        console.warn(`[gemini] API key #${index + 1} returned 429 (quota exceeded); no further keys configured.`);
-      }
-      throw new GeminiRequestError(error instanceof Error ? error.message : String(error));
+      // Full technical detail goes to the server log; only a clean sentence is ever thrown
+      // upward from here, since that message is what eventually reaches the user's screen.
+      console.error(`[gemini] request failed on API key #${index + 1}${status ? ` (status ${status})` : ""}:`, error);
+      throw new GeminiRequestError(describeRequestFailure(status));
     }
   }
 
   // Unreachable: getGeminiClients() guarantees at least one key, and the loop above always
   // returns or throws on its last iteration. Kept for type-safety (TS can't see that).
-  throw new GeminiRequestError("No Gemini API keys are configured.");
+  throw new GeminiRequestError(describeRequestFailure(undefined));
 }
 
 /**
@@ -147,15 +167,15 @@ async function callGeminiForJsonArray<T>(params: {
     return await attempt(false);
   } catch (error) {
     if (error instanceof GeminiRequestError) {
-      throw new Error(`${errorContext}: the request to Gemini failed — ${error.message}`);
+      throw new Error(`${errorContext}: ${error.message}`);
     }
     try {
       return await attempt(true);
     } catch (retryError) {
       if (retryError instanceof GeminiRequestError) {
-        throw new Error(`${errorContext}: the request to Gemini failed — ${retryError.message}`);
+        throw new Error(`${errorContext}: ${retryError.message}`);
       }
-      throw new Error(`${errorContext}: Gemini's response could not be parsed as valid structured data, even after retrying.`);
+      throw new Error(`${errorContext}: the AI had trouble with this request — please try again.`);
     }
   }
 }

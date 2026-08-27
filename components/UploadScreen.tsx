@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRight, Award, BookOpen, CheckCircle2, Loader2, UserRound } from "lucide-react";
+import { useRef, useState } from "react";
+import { AlertTriangle, ArrowRight, Award, BookOpen, CheckCircle2, Loader2, RotateCcw, UserRound } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import FileUploadBox from "@/components/FileUploadBox";
@@ -58,6 +58,11 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
   const [answerSheet, setAnswerSheet] = useState<UploadedFileMeta | null>(null);
   const [mappingStatus, setMappingStatus] = useState<MappingStatus>("idle");
   const [mappingMessage, setMappingMessage] = useState<string | null>(null);
+  // Belt-and-suspenders against a double-click firing two requests: the disabled button
+  // already covers the common case, but its DOM update lands a tick after the state update
+  // that triggers it, so a fast enough second click could squeeze through. A ref updates
+  // immediately (no render/batching delay), so it can't race the same way.
+  const isSubmittingRef = useRef(false);
 
   const bothUploaded = !!questionPaper && !!answerSheet;
   const canStartMapping = bothUploaded && mappingStatus !== "processing";
@@ -68,7 +73,8 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
   };
 
   const handleStartMapping = async () => {
-    if (!questionPaper || !answerSheet) return;
+    if (!questionPaper || !answerSheet || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     setMappingStatus("processing");
     setMappingMessage("Converting pages...");
@@ -101,6 +107,8 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
       console.error("Processing failed:", error);
       setMappingStatus("error");
       setMappingMessage(error instanceof Error ? error.message : "Something went wrong while processing the files.");
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -118,6 +126,33 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
               <div>
                 <p className="text-base font-semibold text-neutral-800">{mappingMessage ?? "Processing…"}</p>
                 <p className="mt-1 max-w-xs text-sm text-neutral-500">This can take a minute.</p>
+              </div>
+            </div>
+          ) : mappingStatus === "error" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500">
+                <AlertTriangle size={26} />
+              </span>
+              <div>
+                <p className="text-base font-semibold text-neutral-800">Something went wrong</p>
+                <p className="mt-1 max-w-sm text-sm text-neutral-500">{mappingMessage}</p>
+              </div>
+              <div className="mt-1 flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleStartMapping}
+                  className="flex items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800"
+                >
+                  <RotateCcw size={15} />
+                  Try Again
+                </button>
+                <button
+                  type="button"
+                  onClick={resetMappingStatus}
+                  className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-700 hover:underline"
+                >
+                  Change files
+                </button>
               </div>
             </div>
           ) : (
@@ -188,8 +223,10 @@ export default function UploadScreen({ onProcessed }: UploadScreenProps) {
                   Start Mapping
                   <ArrowRight size={16} />
                 </button>
-                <p className={`mt-3 max-w-sm text-center text-xs ${mappingStatus === "error" ? "text-red-500" : "text-neutral-400"}`}>
-                  {mappingMessage ?? "Once both files are uploaded, you'll able to map answers with questions"}
+                {/* mappingMessage is only ever non-null while "processing" or "error", both of
+                    which render their own dedicated view above instead of this form. */}
+                <p className="mt-3 max-w-sm text-center text-xs text-neutral-400">
+                  Once both files are uploaded, you&apos;ll able to map answers with questions
                 </p>
               </div>
             </div>

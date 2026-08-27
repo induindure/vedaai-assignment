@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Info } from "lucide-react";
 import QuestionCard from "@/components/QuestionCard";
 import UnmatchedAnswersList from "@/components/UnmatchedAnswersList";
 import GradingSummary from "@/components/GradingSummary";
@@ -11,6 +11,8 @@ import type { GradedMappedQuestion } from "@/types/processing";
 interface QuestionListProps {
   mappedQuestions: GradedMappedQuestion[];
   unmatchedAnswers: AnswerBlock[];
+  /** True when the answer sheet yielded zero handwritten blocks at all (e.g. a blank page). */
+  noAnswersDetected: boolean;
   selectedKey: string | null;
   onSelectQuestion: (index: number) => void;
   onSelectUnmatched: (index: number) => void;
@@ -20,6 +22,7 @@ interface QuestionListProps {
 export default function QuestionList({
   mappedQuestions,
   unmatchedAnswers,
+  noAnswersDetected,
   selectedKey,
   onSelectQuestion,
   onSelectUnmatched,
@@ -67,6 +70,13 @@ export default function QuestionList({
         <div className="space-y-2.5">
           {mappedQuestions.length === 0 && (
             <p className="py-8 text-center text-sm text-neutral-400">No questions were found in the question paper.</p>
+          )}
+
+          {noAnswersDetected && mappedQuestions.length > 0 && (
+            <div className="flex items-start gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-3.5 py-3 text-xs text-blue-700">
+              <Info size={15} className="mt-0.5 shrink-0" />
+              <span>No answers were detected on the uploaded sheet — every question below is marked unanswered.</span>
+            </div>
           )}
 
           {mappedQuestions.map((mapped, index) => (
