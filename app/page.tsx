@@ -1,5 +1,5 @@
-import UploadScreen from "@/components/UploadScreen";
+import MappingApp from "@/components/MappingApp";
 
 export default function Home() {
-  return <UploadScreen />;
+  return <MappingApp />;
 }

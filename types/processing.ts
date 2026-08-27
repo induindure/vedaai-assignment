@@ -1,5 +1,6 @@
 import type { ExtractedQuestion } from "@/lib/extractQuestions";
 import type { ExtractedAnswerBlock } from "@/lib/extractAnswers";
+import type { MappingResult } from "@/lib/mapAnswers";
 
 export interface PageImageData {
   pageNumber: number;
@@ -20,6 +21,7 @@ export interface ProcessResponse {
   answerSheet: ProcessedFile;
   questions: ExtractedQuestion[];
   answers: ExtractedAnswerBlock[];
+  mapping: MappingResult;
 }
 
 export interface ProcessErrorResponse {

@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { ArrowLeft, Bell, ChevronDown, HelpCircle, Menu, Sparkles, SquareCheckBig } from "lucide-react";
 
 interface TopBarProps {
-  onMenuClick: () => void;
+  /** Omit to hide the mobile hamburger — e.g. screens with no sidebar to open. */
+  onMenuClick?: () => void;
+  /** Wires the back arrow to real navigation. Left decorative (inert) when omitted. */
+  onBack?: () => void;
 }
 
 function IconButton({ children, ariaLabel }: { children: ReactNode; ariaLabel: string }) {
@@ -19,21 +22,24 @@ function IconButton({ children, ariaLabel }: { children: ReactNode; ariaLabel: s
   );
 }
 
-export default function TopBar({ onMenuClick }: TopBarProps) {
+export default function TopBar({ onMenuClick, onBack }: TopBarProps) {
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 sm:px-6">
       <div className="flex items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          onClick={onMenuClick}
-          aria-label="Open menu"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 lg:hidden"
-        >
-          <Menu size={19} />
-        </button>
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 lg:hidden"
+          >
+            <Menu size={19} />
+          </button>
+        )}
 
         <button
           type="button"
+          onClick={onBack}
           aria-label="Go back"
           className="hidden h-9 w-9 items-center justify-center rounded-full border border-neutral-200 text-neutral-500 transition-colors hover:bg-neutral-50 sm:flex"
         >

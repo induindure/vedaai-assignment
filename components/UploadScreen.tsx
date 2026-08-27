@@ -8,9 +8,13 @@ import FileUploadBox from "@/components/FileUploadBox";
 import type { UploadedFileMeta } from "@/types/upload";
 import type { ProcessErrorResponse, ProcessResponse } from "@/types/processing";
 
-type MappingStatus = "idle" | "processing" | "done" | "error";
+type MappingStatus = "idle" | "processing" | "error";
 
-export default function UploadScreen() {
+interface UploadScreenProps {
+  onProcessed: (data: ProcessResponse) => void;
+}
+
+export default function UploadScreen({ onProcessed }: UploadScreenProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [questionPaper, setQuestionPaper] = useState<UploadedFileMeta | null>(null);
   const [answerSheet, setAnswerSheet] = useState<UploadedFileMeta | null>(null);
@@ -45,10 +49,9 @@ export default function UploadScreen() {
       }
 
       console.log("Processing complete:", data);
-      console.log("Extracted questions:", data.questions);
-      console.log("Extracted answers:", data.answers);
-      setMappingStatus("done");
-      setMappingMessage("Processing complete, check console.");
+      // mappingStatus stays "processing" here on purpose — the parent immediately swaps this
+      // screen out for ResultsScreen, so there's no "done" state of this screen to render.
+      onProcessed(data);
     } catch (error) {
       console.error("Processing failed:", error);
       setMappingStatus("error");
@@ -64,95 +67,90 @@ export default function UploadScreen() {
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
 
         <main className="flex flex-1 justify-center px-4 py-10 sm:px-8 sm:py-14">
-          <div className="w-full max-w-[950px]">
-            <h1 className="text-center text-2xl font-bold leading-snug text-neutral-900 sm:text-3xl">
-              Upload{" "}
-              <span className="inline-block rounded-2xl bg-[#FBEAD3] px-3 py-1 text-[#D9782F]">
-                Question Paper &amp; Answer Sheets
-              </span>
-            </h1>
-            <p className="mt-3 text-center text-sm text-neutral-500">Upload both files to get started</p>
+          {mappingStatus === "processing" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+              <Loader2 size={36} className="animate-spin text-neutral-400" />
+              <div>
+                <p className="text-base font-semibold text-neutral-800">Processing…</p>
+                <p className="mt-1 max-w-xs text-sm text-neutral-500">
+                  Reading both files, extracting questions and answers, and mapping them together. This can take a minute.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full max-w-[950px]">
+              <h1 className="text-center text-2xl font-bold leading-snug text-neutral-900 sm:text-3xl">
+                Upload{" "}
+                <span className="inline-block rounded-2xl bg-[#FBEAD3] px-3 py-1 text-[#D9782F]">
+                  Question Paper &amp; Answer Sheets
+                </span>
+              </h1>
+              <p className="mt-3 text-center text-sm text-neutral-500">Upload both files to get started</p>
 
-            <div className="relative mx-auto my-8 flex h-36 w-36 items-center justify-center sm:h-44 sm:w-44">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-200 via-orange-100 to-transparent blur-2xl" />
-              <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-sm ring-4 ring-white sm:h-32 sm:w-32">
-                <UserRound className="h-14 w-14 text-orange-400 sm:h-16 sm:w-16" strokeWidth={1.5} />
+              <div className="relative mx-auto my-8 flex h-36 w-36 items-center justify-center sm:h-44 sm:w-44">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-200 via-orange-100 to-transparent blur-2xl" />
+                <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-sm ring-4 ring-white sm:h-32 sm:w-32">
+                  <UserRound className="h-14 w-14 text-orange-400 sm:h-16 sm:w-16" strokeWidth={1.5} />
+                </div>
+
+                <span className="absolute -top-1 left-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-orange-500 shadow ring-1 ring-neutral-100">
+                  <BookOpen size={14} />
+                </span>
+                <span className="absolute top-3 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-emerald-500 shadow ring-1 ring-neutral-100">
+                  <CheckCircle2 size={14} />
+                </span>
+                <span className="absolute bottom-0 -left-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-amber-500 shadow ring-1 ring-neutral-100">
+                  <Award size={13} />
+                </span>
               </div>
 
-              <span className="absolute -top-1 left-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-orange-500 shadow ring-1 ring-neutral-100">
-                <BookOpen size={14} />
-              </span>
-              <span className="absolute top-3 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-emerald-500 shadow ring-1 ring-neutral-100">
-                <CheckCircle2 size={14} />
-              </span>
-              <span className="absolute bottom-0 -left-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-amber-500 shadow ring-1 ring-neutral-100">
-                <Award size={13} />
-              </span>
-            </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FileUploadBox
+                  subject="Question Paper"
+                  value={questionPaper}
+                  onFileAccepted={(meta) => {
+                    setQuestionPaper(meta);
+                    resetMappingStatus();
+                  }}
+                  onRemove={() => {
+                    setQuestionPaper(null);
+                    resetMappingStatus();
+                  }}
+                />
+                <FileUploadBox
+                  subject="Answer Sheet"
+                  value={answerSheet}
+                  onFileAccepted={(meta) => {
+                    setAnswerSheet(meta);
+                    resetMappingStatus();
+                  }}
+                  onRemove={() => {
+                    setAnswerSheet(null);
+                    resetMappingStatus();
+                  }}
+                />
+              </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FileUploadBox
-                subject="Question Paper"
-                value={questionPaper}
-                onFileAccepted={(meta) => {
-                  setQuestionPaper(meta);
-                  resetMappingStatus();
-                }}
-                onRemove={() => {
-                  setQuestionPaper(null);
-                  resetMappingStatus();
-                }}
-              />
-              <FileUploadBox
-                subject="Answer Sheet"
-                value={answerSheet}
-                onFileAccepted={(meta) => {
-                  setAnswerSheet(meta);
-                  resetMappingStatus();
-                }}
-                onRemove={() => {
-                  setAnswerSheet(null);
-                  resetMappingStatus();
-                }}
-              />
+              <div className="mt-8 flex flex-col items-center">
+                <button
+                  type="button"
+                  disabled={!canStartMapping}
+                  onClick={handleStartMapping}
+                  className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${
+                    canStartMapping
+                      ? "cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800"
+                      : "cursor-not-allowed bg-neutral-100 text-neutral-400"
+                  }`}
+                >
+                  Start Mapping
+                  <ArrowRight size={16} />
+                </button>
+                <p className={`mt-3 max-w-sm text-center text-xs ${mappingStatus === "error" ? "text-red-500" : "text-neutral-400"}`}>
+                  {mappingMessage ?? "Once both files are uploaded, you'll able to map answers with questions"}
+                </p>
+              </div>
             </div>
-
-            <div className="mt-8 flex flex-col items-center">
-              <button
-                type="button"
-                disabled={!canStartMapping}
-                onClick={handleStartMapping}
-                className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${
-                  canStartMapping
-                    ? "cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800"
-                    : "cursor-not-allowed bg-neutral-100 text-neutral-400"
-                }`}
-              >
-                {mappingStatus === "processing" ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Processing…
-                  </>
-                ) : (
-                  <>
-                    Start Mapping
-                    <ArrowRight size={16} />
-                  </>
-                )}
-              </button>
-              <p
-                className={`mt-3 max-w-sm text-center text-xs ${
-                  mappingStatus === "error"
-                    ? "text-red-500"
-                    : mappingStatus === "done"
-                      ? "text-emerald-600"
-                      : "text-neutral-400"
-                }`}
-              >
-                {mappingMessage ?? "Once both files are uploaded, you'll able to map answers with questions"}
-              </p>
-            </div>
-          </div>
+          )}
         </main>
       </div>
     </div>
