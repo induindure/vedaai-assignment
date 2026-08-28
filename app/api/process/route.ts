@@ -25,6 +25,21 @@ async function rasterizeUpload(file: File): Promise<PageImage[]> {
   return fileToImages(buffer, file.type);
 }
 
+/** Logs how long `promise` took to settle (success or failure) under `label`, then passes the outcome through unchanged. */
+function timeStage<T>(label: string, promise: Promise<T>): Promise<T> {
+  const start = performance.now();
+  return promise.then(
+    (value) => {
+      console.log(`[timing] ${label}: ${(performance.now() - start).toFixed(0)}ms`);
+      return value;
+    },
+    (error) => {
+      console.log(`[timing] ${label}: ${(performance.now() - start).toFixed(0)}ms (failed)`);
+      throw error;
+    },
+  );
+}
+
 function toProcessedFile(pages: PageImage[]): ProcessedFile {
   const pageData: PageImageData[] = pages.map((page) => ({
     pageNumber: page.pageNumber,
@@ -70,6 +85,8 @@ export async function POST(request: NextRequest) {
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       };
 
+      const requestStart = performance.now();
+
       try {
         send({ type: "progress", message: "Converting pages..." });
 
@@ -83,21 +100,21 @@ export async function POST(request: NextRequest) {
           send({ type: "progress", message: "Extracting questions and answers..." });
         };
 
-        async function processDocument<T>(file: File, extract: (pages: PageImage[]) => Promise<T>) {
-          const pages = await rasterizeUpload(file);
+        async function processDocument<T>(label: string, file: File, extract: (pages: PageImage[]) => Promise<T>) {
+          const pages = await timeStage(`rasterize:${label}`, rasterizeUpload(file));
           announceExtractingOnce();
-          const extracted = await extract(pages);
+          const extracted = await timeStage(`extract:${label}`, extract(pages));
           return { pages, extracted };
         }
 
         const [questionPaperResult, answerSheetResult] = await Promise.all([
-          processDocument(questionPaperEntry, extractQuestions),
-          processDocument(answerSheetEntry, extractAnswers),
+          processDocument("questionPaper", questionPaperEntry, extractQuestions),
+          processDocument("answerSheet", answerSheetEntry, extractAnswers),
         ]);
 
         send({ type: "progress", message: "Mapping answers to questions..." });
 
-        const mapping = await mapAnswers(questionPaperResult.extracted, answerSheetResult.extracted);
+        const mapping = await timeStage("map", mapAnswers(questionPaperResult.extracted, answerSheetResult.extracted));
 
         send({ type: "progress", message: "Grading answers..." });
 
@@ -109,12 +126,14 @@ export async function POST(request: NextRequest) {
         // "ungraded" rather than a score.
         let gradedMappedQuestions: GradedMappedQuestion[];
         try {
-          const gradings = await gradeAnswers(mapping.mappedQuestions);
+          const gradings = await timeStage("grade", gradeAnswers(mapping.mappedQuestions));
           gradedMappedQuestions = mapping.mappedQuestions.map((mapped, index) => ({ ...mapped, grading: gradings[index] }));
         } catch (error) {
           console.error("Grading failed; returning the mapping result ungraded.", error);
           gradedMappedQuestions = mapping.mappedQuestions.map((mapped) => ({ ...mapped, grading: null }));
         }
+
+        console.log(`[timing] total: ${(performance.now() - requestStart).toFixed(0)}ms`);
 
         const result: ProcessResponse = {
           questionPaper: toProcessedFile(questionPaperResult.pages),
@@ -126,6 +145,7 @@ export async function POST(request: NextRequest) {
 
         send({ type: "result", data: result });
       } catch (error) {
+        console.log(`[timing] total (failed): ${(performance.now() - requestStart).toFixed(0)}ms`);
         const message = error instanceof Error ? error.message : "Failed to process the uploaded files.";
         send({ type: "error", message });
       } finally {

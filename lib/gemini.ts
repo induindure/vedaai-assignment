@@ -1,18 +1,36 @@
 import { GoogleGenAI, type GenerateContentParameters, type GenerateContentResponse, type Part } from "@google/genai";
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 import type { PageImage } from "@/lib/fileToImages";
 
-// gemini-3.7-flash is the newest model but was observed to be unreliable (503s, and one
-// request that hung for ~23 minutes before failing) at the time this was written.
-// gemini-3.6-flash responded quickly and successfully, and is also the model Google's own
-// API points callers of retired models (2.0/2.5 Flash) toward — use it for now.
-const GEMINI_MODEL = "gemini-3.6-flash";
+// A timing diagnostic on gemini-3.6-flash (this app's prior model) showed Gemini call
+// latency dominates total request time (extraction + grading, ~25-50s combined, with large
+// run-to-run variance) — rasterization and everything else we control is negligible by
+// comparison. Switched to gemini-3.5-flash-lite, the lite tier's current model: it's what
+// Google's own API points callers of retired lite models (2.5-flash-lite) toward, confirmed
+// to support vision + JSON mode via a live test, and measured faster in that same test
+// (~7s vs ~6-9s for gemini-3.6-flash/3.5-flash on an identical single-page request — noisy
+// single samples, but directionally consistent with a lighter model). gemini-3.1-flash-lite
+// tested faster still (~3s) but is an older generation with less basis for trusting its
+// accuracy on this task, so wasn't chosen without more evidence than one quick sample.
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 // One request can cover every page of a document instead of just one page, so the timeout
 // scales with page count (more images, more expected output) rather than using a fixed budget.
 const BASE_TIMEOUT_MS = 60_000;
 const PER_PAGE_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 240_000;
+
+const FlatBboxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
+
+/**
+ * Schema for a [ymin, xmin, ymax, xmax] bounding box. Diagnosed a real failure mode after
+ * switching to gemini-3.5-flash-lite: it occasionally wraps this in an extra array level —
+ * [[a, b, c, d]] instead of [a, b, c, d] — despite the prompt asking for a flat tuple, and
+ * this happened inconsistently even across the strict-prompt retry within the same request.
+ * Accepting and normalizing that shape here is more reliable than hoping a differently-worded
+ * prompt catches every case.
+ */
+export const BboxSchema = z.union([FlatBboxSchema, z.tuple([FlatBboxSchema]).transform(([inner]) => inner)]);
 
 // ---------------------------------------------------------------------------
 // Multi-key support

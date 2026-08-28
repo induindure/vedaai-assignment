@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { PageImage } from "@/lib/fileToImages";
-import { generateJsonArrayForDocument } from "@/lib/gemini";
+import { BboxSchema, generateJsonArrayForDocument } from "@/lib/gemini";
 
 export interface ExtractedAnswerBlock {
   detectedLabel: string | null;
@@ -25,7 +25,7 @@ function buildAnswerBlockArraySchema(validPageNumbers: Set<number>) {
       page: z.number().int().refine((page) => validPageNumbers.has(page), {
         message: "page is not one of the page numbers provided in this request",
       }),
-      bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+      bbox: BboxSchema,
       continuesFromPreviousPage: z.boolean(),
     }),
   );

@@ -13,11 +13,13 @@ export interface PageImage {
 const PDF_MIME_TYPE = "application/pdf";
 const SUPPORTED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
 
-// scale is a multiplier on the PDF's own 72-points-per-inch unit, so scale 2 renders at
-// 144 DPI — already within the ~150-200 DPI range generally considered sufficient for
-// OCR/handwriting recognition, not the "300 DPI" print-quality resolution that would be
-// worth cutting down. Left as-is; JPEG output (below) is the actual payload-size lever here.
-const PDF_RENDER_SCALE = 2;
+// scale is a multiplier on the PDF's own 72-points-per-inch unit. A timing diagnostic showed
+// rasterization itself is negligible (~150-200ms) and Gemini's own inference time dominates —
+// but inference time for a vision request scales with how many image tokens the input tiles
+// into, which is driven by pixel dimensions, not file size. Testing this value down (currently
+// 1, i.e. 72 DPI, down from a prior 2/144 DPI) while re-verifying extraction accuracy is the
+// point of that exercise; see the task that changed this for the actual before/after numbers.
+const PDF_RENDER_SCALE = 1;
 
 // pdf-to-img can encode either PNG or JPEG but doesn't expose a quality knob for JPEG (it
 // calls @napi-rs/canvas's encoder with no quality argument, i.e. its default). Rendered pages
