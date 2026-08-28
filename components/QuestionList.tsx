@@ -39,11 +39,20 @@ export default function QuestionList({
     setExpandedIndices(allExpanded ? new Set() : new Set(eligibleIndices));
   };
 
-  // Selecting a card always expands it (never collapses on click) — clicking should reveal
-  // the mapping detail and drive the right panel, not require a second click to see anything.
-  // Bulk collapse is handled solely by the "Collapse All" toggle above.
+  // Clicking a card toggles its own expanded state (collapsed -> expanded -> collapsed on
+  // repeated clicks), independent of selection: it's still selected/highlighted on the right
+  // panel every time regardless of whether this click expanded or collapsed it. Bulk
+  // expand/collapse is handled separately by the "Expand All"/"Collapse All" toggle above.
   const handleSelect = (index: number) => {
-    setExpandedIndices((prev) => new Set(prev).add(index));
+    setExpandedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
     onSelectQuestion(index);
   };
 
