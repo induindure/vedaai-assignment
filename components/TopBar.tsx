@@ -1,12 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowLeft, Bell, ChevronDown, HelpCircle, Menu, Sparkles, SquareCheckBig } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ArrowLeft, Bell, ChevronDown, HelpCircle, Home, Menu, Sparkles, SquareCheckBig } from "lucide-react";
+import { useAppShell } from "@/lib/app-shell-context";
 
 interface TopBarProps {
-  /** Omit to hide the mobile hamburger — e.g. screens with no sidebar to open. */
-  onMenuClick?: () => void;
-  /** Wires the back arrow to real navigation. Left decorative (inert) when omitted. */
+  /** Wires the back arrow to real navigation. Omit to hide it entirely (e.g. the Home page). */
   onBack?: () => void;
 }
 
@@ -22,33 +22,45 @@ function IconButton({ children, ariaLabel }: { children: ReactNode; ariaLabel: s
   );
 }
 
-export default function TopBar({ onMenuClick, onBack }: TopBarProps) {
+export default function TopBar({ onBack }: TopBarProps) {
+  // The sidebar itself now lives once in the root layout (see AppShell) rather than being
+  // re-created on every page, so opening its mobile drawer goes through shared context
+  // instead of a per-page prop.
+  const { openSidebar } = useAppShell();
+
+  // This label used to be hardcoded to "Exams" back when the app only had one screen —
+  // now that "/" is its own Home dashboard, it needs to reflect whichever page is current.
+  const pathname = usePathname();
+  const isHome = pathname === "/";
+  const TitleIcon = isHome ? Home : SquareCheckBig;
+  const title = isHome ? "Home" : "Exams";
+
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 sm:px-6">
       <div className="flex items-center gap-2 sm:gap-3">
-        {onMenuClick && (
+        <button
+          type="button"
+          onClick={openSidebar}
+          aria-label="Open menu"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 lg:hidden"
+        >
+          <Menu size={19} />
+        </button>
+
+        {onBack && (
           <button
             type="button"
-            onClick={onMenuClick}
-            aria-label="Open menu"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 lg:hidden"
+            onClick={onBack}
+            aria-label="Go back"
+            className="hidden h-9 w-9 items-center justify-center rounded-full border border-neutral-200 text-neutral-500 transition-colors hover:bg-neutral-50 sm:flex"
           >
-            <Menu size={19} />
+            <ArrowLeft size={17} />
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Go back"
-          className="hidden h-9 w-9 items-center justify-center rounded-full border border-neutral-200 text-neutral-500 transition-colors hover:bg-neutral-50 sm:flex"
-        >
-          <ArrowLeft size={17} />
-        </button>
-
         <div className="flex items-center gap-2 text-sm font-semibold text-neutral-800">
-          <SquareCheckBig size={16} className="text-neutral-400" />
-          Exams
+          <TitleIcon size={16} className="text-neutral-400" />
+          {title}
         </div>
       </div>
 

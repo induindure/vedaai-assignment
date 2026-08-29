@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ClipboardList,
   GraduationCap,
@@ -10,22 +12,37 @@ import {
   Sparkles,
   SquareCheckBig,
   X,
+  type LucideIcon,
 } from "lucide-react";
 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Called on every click of "Home" or "Exams" — see AppShellContext.resetSignal for why
+   * this fires even when the click doesn't change the route.
+   */
+  onNavigate: () => void;
 }
 
-const navItems = [
-  { label: "Home", icon: Home },
+interface NavItem {
+  label: string;
+  icon: LucideIcon;
+  /** Omitted for the items that are out of scope and stay static/non-interactive. */
+  href?: string;
+}
+
+const navItems: NavItem[] = [
+  { label: "Home", icon: Home, href: "/" },
   { label: "My Classroom", icon: GraduationCap },
   { label: "Assignments", icon: ClipboardList },
-  { label: "Exams", icon: SquareCheckBig },
+  { label: "Exams", icon: SquareCheckBig, href: "/exams" },
   { label: "My Library", icon: Library },
 ];
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, onClose, onNavigate }: SidebarProps) {
+  const pathname = usePathname();
+
   return (
     <>
       {open && (
@@ -67,21 +84,36 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         </button>
 
         <nav className="mt-6 flex flex-1 flex-col gap-1 px-3">
-          {navItems.map(({ label, icon: Icon }) => {
-            const isActive = label === "Exams";
+          {navItems.map(({ label, icon: Icon, href }) => {
+            const isActive = href !== undefined && pathname === href;
+            const className = `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+              isActive
+                ? "bg-neutral-100 text-neutral-900"
+                : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800"
+            }`;
+
+            if (!href) {
+              return (
+                <button key={label} type="button" className={className}>
+                  <Icon size={17} strokeWidth={isActive ? 2.25 : 2} />
+                  {label}
+                </button>
+              );
+            }
+
             return (
-              <button
+              <Link
                 key={label}
-                type="button"
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-neutral-100 text-neutral-900"
-                    : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800"
-                }`}
+                href={href}
+                onClick={() => {
+                  onNavigate();
+                  onClose();
+                }}
+                className={className}
               >
                 <Icon size={17} strokeWidth={isActive ? 2.25 : 2} />
                 {label}
-              </button>
+              </Link>
             );
           })}
         </nav>
