@@ -5,6 +5,7 @@ import { ChevronsDownUp, ChevronsUpDown, Info } from "lucide-react";
 import QuestionCard from "@/components/QuestionCard";
 import UnmatchedAnswersList from "@/components/UnmatchedAnswersList";
 import GradingSummary from "@/components/GradingSummary";
+import DownloadReportButton from "@/components/DownloadReportButton";
 import type { AnswerBlock } from "@/lib/mapAnswers";
 import type { GradedMappedQuestion } from "@/types/processing";
 
@@ -58,19 +59,22 @@ export default function QuestionList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-1 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-neutral-100 px-1 pb-4">
         <h2 className="text-sm font-semibold text-neutral-800">
           Extracted Questions <span className="font-normal text-neutral-400">(from question paper)</span>
         </h2>
-        <button
-          type="button"
-          onClick={toggleExpandAll}
-          disabled={eligibleIndices.length === 0}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-50 disabled:opacity-40"
-        >
-          {allExpanded ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
-          {allExpanded ? "Collapse All" : "Expand All"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <DownloadReportButton mapping={{ mappedQuestions, unmatchedAnswers }} />
+          <button
+            type="button"
+            onClick={toggleExpandAll}
+            disabled={eligibleIndices.length === 0}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+          >
+            {allExpanded ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
+            {allExpanded ? "Collapse All" : "Expand All"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 flex-1 overflow-y-auto pr-1">
